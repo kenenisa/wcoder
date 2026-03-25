@@ -475,6 +475,22 @@ install_cursor_cli() {
 # --- Main ---------------------------------------------------------------------
 main() {
   parse_args "$@"
+
+  # Resolve "latest" to the actual release tag
+  if [[ "$VERSION" == "latest" ]]; then
+    local resolved
+    resolved="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+      "https://github.com/${REPO}/releases/latest" 2>/dev/null \
+      | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+' || true)"
+    if [[ -n "$resolved" ]]; then
+      VERSION="$resolved"
+    fi
+  fi
+
+  echo ""
+  echo "  WCoder Installer — ${VERSION}"
+  echo ""
+
   detect_platform
   detect_existing
   prompt_config
