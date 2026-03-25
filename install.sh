@@ -425,23 +425,51 @@ EOF
 
 # --- Install Cursor CLI (agent) -----------------------------------------------
 install_cursor_cli() {
-  if command -v agent &>/dev/null; then
-    ok "Cursor CLI ('agent') already installed"
+  if [[ -x "${INSTALL_DIR}/agent" ]]; then
+    ok "Cursor CLI ('agent') already installed at ${INSTALL_DIR}/agent"
     return
   fi
 
   info "Installing Cursor CLI ..."
 
-  if curl -fsSL https://cursor.com/install | bash 2>/dev/null; then
-    if command -v agent &>/dev/null; then
-      ok "Cursor CLI installed"
-      return
-    fi
+  # Fetch the official installer script to extract the current download URL
+  local installer_script
+  installer_script="$(curl -fsSL https://cursor.com/install 2>/dev/null || true)"
+
+  local download_url=""
+  if [[ -n "$installer_script" ]]; then
+    download_url="$(echo "$installer_script" | grep -oP 'DOWNLOAD_URL="[^"]*' | head -1 | cut -d'"' -f2)"
   fi
 
-  warn "Could not auto-install Cursor CLI."
-  warn "Install it manually: curl -fsSL https://cursor.com/install | bash"
-  warn "The bot will run but /clone will fail until 'agent' is in PATH."
+  if [[ -z "$download_url" ]]; then
+    warn "Could not fetch Cursor CLI download URL from cursor.com."
+    warn "Install it manually on the server:"
+    warn "  curl -fsSL https://cursor.com/install | bash"
+    warn "  sudo cp ~/.local/bin/agent ${INSTALL_DIR}/agent"
+    warn "Then restart: sudo systemctl restart wcoder"
+    return
+  fi
+
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+
+  info "Downloading Cursor CLI from ${download_url} ..."
+  if ! curl -fsSL "$download_url" | tar --strip-components=1 -xzf - -C "$tmpdir"; then
+    rm -rf "$tmpdir"
+    warn "Cursor CLI download failed."
+    warn "Install it manually: curl -fsSL https://cursor.com/install | bash"
+    return
+  fi
+
+  if [[ -f "${tmpdir}/cursor-agent" ]]; then
+    sudo install -m 755 "${tmpdir}/cursor-agent" "${INSTALL_DIR}/agent"
+    ok "Cursor CLI installed to ${INSTALL_DIR}/agent"
+  else
+    warn "cursor-agent binary not found in downloaded package."
+    warn "Install it manually: curl -fsSL https://cursor.com/install | bash"
+  fi
+
+  rm -rf "$tmpdir"
 }
 
 # --- Main ---------------------------------------------------------------------
