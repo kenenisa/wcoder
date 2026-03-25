@@ -4,10 +4,35 @@ import logger from "../utils/logger.js";
 
 export const bot = new Bot(config.telegram.botToken);
 
+const BOT_COMMANDS = [
+  { command: "start", description: "Welcome & onboarding" },
+  { command: "github", description: "Set GitHub personal access token" },
+  { command: "cursor", description: "Set Cursor API key" },
+  { command: "repos", description: "List your GitHub repositories" },
+  { command: "clone", description: "Clone a repo and start coding" },
+  { command: "switch", description: "Switch to another cloned repo" },
+  { command: "model", description: "Change AI model" },
+  { command: "mode", description: "Switch agent mode (agent/plan/ask)" },
+  { command: "new", description: "Start a new coding session" },
+  { command: "sessions", description: "List session history" },
+  { command: "resume", description: "Resume a previous session" },
+  { command: "status", description: "Current session info" },
+  { command: "stop", description: "Stop the Cursor agent" },
+  { command: "commit", description: "Commit current changes" },
+  { command: "push", description: "Push current branch" },
+  { command: "pr", description: "Create a pull request" },
+  { command: "branch", description: "Create & switch to a new branch" },
+  { command: "diff", description: "Show uncommitted changes" },
+  { command: "git", description: "Run an arbitrary git command" },
+  { command: "help", description: "Show available commands" },
+];
+
 export async function startBot() {
   bot.catch((err) => {
     logger.error({ err: err.error, ctx: err.ctx?.update?.update_id }, "Unhandled bot error");
   });
+
+  await bot.api.setMyCommands(BOT_COMMANDS);
 
   if (config.webhook.domain) {
     const path = `/webhook/${config.webhook.secret || config.telegram.botToken}`;
