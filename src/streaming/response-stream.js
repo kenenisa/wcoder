@@ -1,5 +1,5 @@
 import { DraftSender, sendTypingAction } from "./draft-sender.js";
-import { markdownToTelegramHTML, escapeHtml } from "./formatter.js";
+import { markdownToTelegramHtml, escapeHtml } from "./formatter.js";
 import config from "../config.js";
 import logger from "../utils/logger.js";
 
@@ -107,7 +107,7 @@ export class ResponseStream {
         botToken: this.#botToken,
         chatId: this.#chatId,
         api: this.#api,
-        formatFn: markdownToTelegramHTML,
+        formatFn: markdownToTelegramHtml,
       });
     }
     return this.#sender;

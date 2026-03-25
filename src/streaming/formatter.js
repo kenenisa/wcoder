@@ -3,56 +3,76 @@
  *
  * Telegram supports: <b>, <i>, <u>, <s>, <code>, <pre>, <a>, <blockquote>
  * We convert from Markdown equivalents and strip unsupported syntax.
+ *
+ * Strategy: extract code blocks into placeholders before escaping HTML so
+ * their contents are escaped exactly once, then apply block-level and
+ * inline transformations on the already-escaped text.
  */
 
-export function markdownToTelegramHTML(md) {
+export function markdownToTelegramHtml(md) {
   if (!md) return "";
+
+  const placeholders = [];
+  const ph = (html) => {
+    const idx = placeholders.length;
+    placeholders.push(html);
+    return `\x00P${idx}\x00`;
+  };
 
   let html = md;
 
-  // Escape HTML entities first (but we'll unescape our own tags after)
+  // --- Phase 1: extract code (raw, before escaping) ---
+
+  // Fenced code blocks (handles unclosed blocks for streaming via `$` fallback)
+  html = html.replace(/```(\w*)\n([\s\S]*?)(?:```|$)/g, (_, lang, code) => {
+    const cls = lang ? ` class="language-${lang}"` : "";
+    return ph(`<pre><code${cls}>${escapeHtml(code.trimEnd())}</code></pre>`);
+  });
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, (_, code) => ph(`<code>${escapeHtml(code)}</code>`));
+
+  // --- Phase 2: escape remaining HTML ---
+
   html = escapeHtml(html);
 
-  // Code blocks: ```lang\ncode\n``` → <pre><code class="language-lang">code</code></pre>
-  html = html.replace(
-    /```(\w*)\n([\s\S]*?)```/g,
-    (_, lang, code) => {
-      const cls = lang ? ` class="language-${lang}"` : "";
-      return `<pre><code${cls}>${code.trimEnd()}</code></pre>`;
-    }
-  );
+  // --- Phase 3: block-level transformations ---
 
-  // Inline code: `code` → <code>code</code>
-  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  // Tables (2+ consecutive lines bounded by |) → <pre>
+  html = html.replace(/((?:^\|.*\|[ \t]*$\n?){2,})/gm, (table) => {
+    const lines = table.trimEnd().split("\n")
+      .filter((l) => !/^\|[\s\-:|]+\|$/.test(l));
+    if (lines.length === 0) return table;
+    return ph(`<pre>${lines.join("\n")}</pre>`);
+  });
 
-  // Bold: **text** or __text__ → <b>text</b>
+  html = html.replace(/^#{1,6}\s+(.+)$/gm, "<b>$1</b>");
+
+  html = html.replace(/^&gt;\s*(.+)$/gm, "<blockquote>$1</blockquote>");
+  html = html.replace(/<\/blockquote>\n<blockquote>/g, "\n");
+
+  html = html.replace(/^-{3,}$/gm, "────────────────");
+
+  // --- Phase 4: inline transformations ---
+
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<b><i>$1</i></b>");
   html = html.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
   html = html.replace(/__(.+?)__/g, "<b>$1</b>");
 
-  // Italic: *text* or _text_ → <i>text</i>
-  // Avoid matching inside already-processed bold tags
-  html = html.replace(/(?<!\w)\*([^*]+?)\*(?!\w)/g, "<i>$1</i>");
-  html = html.replace(/(?<!\w)_([^_]+?)_(?!\w)/g, "<i>$1</i>");
+  // *text* italic — [^\s*] at start prevents matching list markers like `* item`
+  html = html.replace(/(?<!\w)\*([^\s*][^*]*?)\*(?!\w)/g, "<i>$1</i>");
+  html = html.replace(/(?<!\w)_([^\s_][^_]*?)_(?!\w)/g, "<i>$1</i>");
 
-  // Strikethrough: ~~text~~ → <s>text</s>
   html = html.replace(/~~(.+?)~~/g, "<s>$1</s>");
 
-  // Links: [text](url) → <a href="url">text</a>
-  html = html.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2">$1</a>'
-  );
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
-  // Headers: # Header → <b>HEADER</b>
-  html = html.replace(/^#{1,6}\s+(.+)$/gm, "<b>$1</b>");
+  // --- Phase 5: cleanup ---
 
-  // Blockquotes: > text → <blockquote>text</blockquote>
-  html = html.replace(/^&gt;\s*(.+)$/gm, "<blockquote>$1</blockquote>");
-  // Merge consecutive blockquote lines
-  html = html.replace(/<\/blockquote>\n<blockquote>/g, "\n");
+  html = html.replace(/\n{3,}/g, "\n\n");
 
-  // Horizontal rules
-  html = html.replace(/^---+$/gm, "—————————");
+  // Restore placeholders
+  html = html.replace(/\x00P(\d+)\x00/g, (_, idx) => placeholders[parseInt(idx)]);
 
   return html;
 }
