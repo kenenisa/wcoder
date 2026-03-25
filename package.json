@@ -1,0 +1,25 @@
+{
+  "name": "wcoder",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.js",
+    "dev": "bun --watch run src/index.js",
+    "test": "bun test",
+    "build": "bun build --compile --minify src/index.js --outfile wcoder",
+    "build:linux-x64": "bun build --compile --minify --target=bun-linux-x64 src/index.js --outfile wcoder-linux-x64",
+    "build:linux-arm64": "bun build --compile --minify --target=bun-linux-arm64 src/index.js --outfile wcoder-linux-arm64",
+    "build:darwin-x64": "bun build --compile --minify --target=bun-darwin-x64 src/index.js --outfile wcoder-darwin-x64",
+    "build:darwin-arm64": "bun build --compile --minify --target=bun-darwin-arm64 src/index.js --outfile wcoder-darwin-arm64"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.0.0",
+    "grammy": "^1.41.1",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}
