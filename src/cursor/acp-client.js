@@ -29,19 +29,26 @@ export class ACPClient extends EventEmitter {
     if (this.model) args.push("--model", this.model);
     args.push("acp");
 
-    this.process = spawn("agent", args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: this.cwd,
-    });
+    try {
+      this.process = spawn("agent", args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd: this.cwd,
+      });
+    } catch (err) {
+      const msg = err.code === "ENOENT"
+        ? "Cursor CLI ('agent') not found in PATH. Install it with: curl -fsSL https://www.cursor.com/install-linux.sh | bash"
+        : `Failed to spawn agent process: ${err.message}`;
+      throw new ACPError(msg);
+    }
 
     this.alive = true;
 
     this.process.on("error", (err) => {
       this.alive = false;
       const msg = err.code === "ENOENT"
-        ? "Cursor CLI ('agent') not found. Is it installed and in PATH?"
-        : `Failed to start agent process: ${err.message}`;
-      logger.error({ err, cwd: this.cwd }, msg);
+        ? "Cursor CLI ('agent') not found in PATH."
+        : `Agent process error: ${err.message}`;
+      logger.error({ cwd: this.cwd }, msg);
       this._rejectAllPending(msg);
       this.emit("exit", { code: 1, signal: null });
     });

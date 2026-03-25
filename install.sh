@@ -423,6 +423,32 @@ EOF
   ok "launchd agent installed and started"
 }
 
+# --- Install Cursor CLI (agent) -----------------------------------------------
+install_cursor_cli() {
+  if command -v agent &>/dev/null; then
+    ok "Cursor CLI ('agent') already installed"
+    return
+  fi
+
+  info "Installing Cursor CLI ..."
+
+  local cli_url="https://www.cursor.com/install-linux.sh"
+  if [[ "$OS" == "darwin" ]]; then
+    cli_url="https://www.cursor.com/install-mac.sh"
+  fi
+
+  if curl -fsSL "$cli_url" | bash 2>/dev/null; then
+    if command -v agent &>/dev/null; then
+      ok "Cursor CLI installed"
+      return
+    fi
+  fi
+
+  warn "Could not auto-install Cursor CLI."
+  warn "Install it manually: https://docs.cursor.com/cli"
+  warn "The bot will run but /clone will fail until 'agent' is in PATH."
+}
+
 # --- Main ---------------------------------------------------------------------
 main() {
   parse_args "$@"
@@ -431,6 +457,7 @@ main() {
   prompt_config
   stop_service
   download_binary
+  install_cursor_cli
   write_env
   ensure_user
   install_sudoers
