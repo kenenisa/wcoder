@@ -424,6 +424,8 @@ EOF
 }
 
 # --- Install Cursor CLI (agent) -----------------------------------------------
+CURSOR_CLI_FALLBACK_VERSION="2026.03.25-933d5a6"
+
 install_cursor_cli() {
   if [[ -x "${INSTALL_DIR}/agent" ]]; then
     ok "Cursor CLI ('agent') already installed at ${INSTALL_DIR}/agent"
@@ -432,32 +434,34 @@ install_cursor_cli() {
 
   info "Installing Cursor CLI ..."
 
-  # Fetch the official installer script to extract the current download URL
+  # Try to get the download URL from the official installer script
+  local download_url=""
   local installer_script
   installer_script="$(curl -fsSL https://cursor.com/install 2>/dev/null || true)"
 
-  local download_url=""
   if [[ -n "$installer_script" ]]; then
     download_url="$(echo "$installer_script" | grep -oP 'DOWNLOAD_URL="[^"]*' | head -1 | cut -d'"' -f2)"
   fi
 
+  # Fallback to direct download URL
   if [[ -z "$download_url" ]]; then
-    warn "Could not fetch Cursor CLI download URL from cursor.com."
-    warn "Install it manually on the server:"
-    warn "  curl -fsSL https://cursor.com/install | bash"
-    warn "  sudo cp ~/.local/bin/agent ${INSTALL_DIR}/agent"
-    warn "Then restart: sudo systemctl restart wcoder"
-    return
+    local cli_os="${OS}"
+    local cli_arch="${ARCH}"
+    download_url="https://downloads.cursor.com/lab/${CURSOR_CLI_FALLBACK_VERSION}/${cli_os}/${cli_arch}/agent-cli-package.tar.gz"
+    info "Using fallback download URL (${CURSOR_CLI_FALLBACK_VERSION})"
   fi
 
   local tmpdir
   tmpdir="$(mktemp -d)"
 
-  info "Downloading Cursor CLI from ${download_url} ..."
+  info "Downloading Cursor CLI ..."
   if ! curl -fsSL "$download_url" | tar --strip-components=1 -xzf - -C "$tmpdir"; then
     rm -rf "$tmpdir"
     warn "Cursor CLI download failed."
-    warn "Install it manually: curl -fsSL https://cursor.com/install | bash"
+    warn "Install it manually:"
+    warn "  curl -fsSL https://cursor.com/install | bash"
+    warn "  sudo cp ~/.local/bin/agent ${INSTALL_DIR}/agent"
+    warn "  sudo systemctl restart wcoder"
     return
   fi
 
@@ -465,8 +469,12 @@ install_cursor_cli() {
     sudo install -m 755 "${tmpdir}/cursor-agent" "${INSTALL_DIR}/agent"
     ok "Cursor CLI installed to ${INSTALL_DIR}/agent"
   else
+    rm -rf "$tmpdir"
     warn "cursor-agent binary not found in downloaded package."
-    warn "Install it manually: curl -fsSL https://cursor.com/install | bash"
+    warn "Install it manually:"
+    warn "  curl -fsSL https://cursor.com/install | bash"
+    warn "  sudo cp ~/.local/bin/agent ${INSTALL_DIR}/agent"
+    return
   fi
 
   rm -rf "$tmpdir"
