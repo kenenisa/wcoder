@@ -432,12 +432,7 @@ install_cursor_cli() {
 
   info "Installing Cursor CLI ..."
 
-  local cli_url="https://www.cursor.com/install-linux.sh"
-  if [[ "$OS" == "darwin" ]]; then
-    cli_url="https://www.cursor.com/install-mac.sh"
-  fi
-
-  if curl -fsSL "$cli_url" | bash 2>/dev/null; then
+  if curl -fsSL https://cursor.com/install | bash 2>/dev/null; then
     if command -v agent &>/dev/null; then
       ok "Cursor CLI installed"
       return
@@ -445,7 +440,7 @@ install_cursor_cli() {
   fi
 
   warn "Could not auto-install Cursor CLI."
-  warn "Install it manually: https://docs.cursor.com/cli"
+  warn "Install it manually: curl -fsSL https://cursor.com/install | bash"
   warn "The bot will run but /clone will fail until 'agent' is in PATH."
 }
 

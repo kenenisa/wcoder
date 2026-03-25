@@ -36,7 +36,7 @@ export class ACPClient extends EventEmitter {
       });
     } catch (err) {
       const msg = err.code === "ENOENT"
-        ? "Cursor CLI ('agent') not found in PATH. Install it with: curl -fsSL https://www.cursor.com/install-linux.sh | bash"
+        ? "Cursor CLI ('agent') not found in PATH. Install it with: curl -fsSL https://cursor.com/install | bash"
         : `Failed to spawn agent process: ${err.message}`;
       throw new ACPError(msg);
     }
