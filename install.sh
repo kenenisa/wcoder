@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- Configuration -----------------------------------------------------------
-REPO="OWNER/wcoder"          # ← replace OWNER with your GitHub username/org
+REPO="kenenisa/wcoder"
 INSTALL_DIR="/usr/local/bin"
 SERVICE_USER="wcoder"
 DATA_DIR="/var/lib/wcoder"
@@ -122,6 +122,24 @@ parse_args() {
 }
 
 # --- Interactive prompts (only for fresh installs) ----------------------------
+HAS_TTY=false
+[[ -t 0 ]] && HAS_TTY=true
+if [[ "$HAS_TTY" == false ]] && [[ -r /dev/tty ]]; then
+  HAS_TTY=true
+fi
+
+prompt() {
+  local var_name="$1" prompt_text="$2" required="${3:-false}"
+  if [[ "$HAS_TTY" == false ]]; then
+    if [[ "$required" == true && -z "${!var_name}" ]]; then
+      die "$var_name is required. Pass --$(echo "$var_name" | tr '[:upper:]' '[:lower:]' | tr '_' '-') via CLI flags."
+    fi
+    return
+  fi
+  printf '%s' "$prompt_text" >/dev/tty
+  read -r "$var_name" </dev/tty
+}
+
 prompt_config() {
   if [[ "$IS_UPDATE" == true ]]; then
     info "Updating — existing config will be preserved"
@@ -129,9 +147,8 @@ prompt_config() {
   fi
 
   if [[ -z "$BOT_TOKEN" ]]; then
-    printf 'Telegram bot token: '
-    read -r BOT_TOKEN
-    [[ -n "$BOT_TOKEN" ]] || die "Bot token is required."
+    prompt BOT_TOKEN "Telegram bot token: " true
+    [[ -n "$BOT_TOKEN" ]] || die "Bot token is required. Pass --bot-token TOKEN."
   fi
 
   if [[ -z "$ENCRYPTION_KEY" ]]; then
@@ -140,8 +157,7 @@ prompt_config() {
   fi
 
   if [[ -z "$WEBHOOK_DOMAIN" ]]; then
-    printf 'Webhook domain (leave empty for long-polling): '
-    read -r WEBHOOK_DOMAIN
+    prompt WEBHOOK_DOMAIN "Webhook domain (leave empty for long-polling): "
   fi
 
   if [[ -n "$WEBHOOK_DOMAIN" && -z "$WEBHOOK_SECRET" ]]; then
@@ -150,13 +166,15 @@ prompt_config() {
   fi
 
   if [[ -z "$ADMIN_USER_ID" ]]; then
-    printf 'Admin Telegram user ID (for /update command, leave empty to skip): '
-    read -r ADMIN_USER_ID
+    prompt ADMIN_USER_ID "Admin Telegram user ID (for /update command, leave empty to skip): "
   fi
 
   if [[ -z "$GITHUB_REPO" ]]; then
-    printf 'GitHub repo (owner/name, for self-update): '
-    read -r GITHUB_REPO
+    prompt GITHUB_REPO "GitHub repo (owner/name, for self-update): "
+  fi
+
+  if [[ -n "$GITHUB_REPO" ]]; then
+    REPO="$GITHUB_REPO"
   fi
 }
 
