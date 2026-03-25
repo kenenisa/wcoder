@@ -209,15 +209,14 @@ download_binary() {
   fi
 
   info "Downloading $asset ..."
-  local tmpdir
-  tmpdir="$(mktemp -d)"
-  trap 'rm -rf "$tmpdir"' EXIT
+  DOWNLOAD_TMPDIR="$(mktemp -d)"
+  trap 'rm -rf "${DOWNLOAD_TMPDIR:-}"' EXIT
 
-  curl -fsSL "$url" -o "${tmpdir}/${asset}" || die "Download failed. Check that the release exists."
-  tar -xzf "${tmpdir}/${asset}" -C "$tmpdir"
+  curl -fsSL "$url" -o "${DOWNLOAD_TMPDIR}/${asset}" || die "Download failed. Check that the release exists."
+  tar -xzf "${DOWNLOAD_TMPDIR}/${asset}" -C "$DOWNLOAD_TMPDIR"
 
   info "Installing to ${INSTALL_DIR}/wcoder ..."
-  sudo install -m 755 "${tmpdir}/wcoder-${PLATFORM}" "${INSTALL_DIR}/wcoder"
+  sudo install -m 755 "${DOWNLOAD_TMPDIR}/wcoder-${PLATFORM}" "${INSTALL_DIR}/wcoder"
   ok "Binary installed"
 }
 
