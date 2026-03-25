@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { EventEmitter } from "node:events";
+import pkg from "../../package.json";
 import logger from "../utils/logger.js";
 import { ACPError } from "../utils/errors.js";
 import config from "../config.js";
@@ -35,15 +36,21 @@ export class ACPClient extends EventEmitter {
 
     this.alive = true;
 
+    this.process.on("error", (err) => {
+      this.alive = false;
+      const msg = err.code === "ENOENT"
+        ? "Cursor CLI ('agent') not found. Is it installed and in PATH?"
+        : `Failed to start agent process: ${err.message}`;
+      logger.error({ err, cwd: this.cwd }, msg);
+      this._rejectAllPending(msg);
+      this.emit("exit", { code: 1, signal: null });
+    });
+
     this.process.on("exit", (code, signal) => {
       this.alive = false;
       logger.warn({ code, signal, cwd: this.cwd }, "ACP process exited");
+      this._rejectAllPending(`ACP process exited (code=${code})`);
       this.emit("exit", { code, signal });
-      // Reject all pending requests
-      for (const [id, waiter] of this.pending) {
-        waiter.reject(new ACPError(`ACP process exited (code=${code})`));
-      }
-      this.pending.clear();
     });
 
     this.process.stderr.on("data", (chunk) => {
@@ -58,7 +65,6 @@ export class ACPClient extends EventEmitter {
     this.rl = createInterface({ input: this.process.stdout });
     this.rl.on("line", (line) => this._handleLine(line));
 
-    // Initialize the ACP connection
     await this._initialize();
     await this._authenticate();
   }
@@ -125,12 +131,33 @@ export class ACPClient extends EventEmitter {
     }
   }
 
-  _send(method, params) {
+  _rejectAllPending(message) {
+    for (const [, waiter] of this.pending) {
+      waiter.reject(new ACPError(message));
+    }
+    this.pending.clear();
+  }
+
+  _send(method, params, timeoutMs = 30_000) {
+    if (!this.alive || !this.process) {
+      return Promise.reject(new ACPError("ACP process is not running."));
+    }
     const id = this.nextId++;
     const payload = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
-    this.process.stdin.write(payload);
+    try {
+      this.process.stdin.write(payload);
+    } catch (err) {
+      return Promise.reject(new ACPError(`Failed to write to ACP: ${err.message}`));
+    }
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new ACPError(`ACP request '${method}' timed out after ${timeoutMs / 1000}s`));
+      }, timeoutMs);
+      this.pending.set(id, {
+        resolve: (v) => { clearTimeout(timer); resolve(v); },
+        reject: (e) => { clearTimeout(timer); reject(e); },
+      });
     });
   }
 
@@ -146,7 +173,7 @@ export class ACPClient extends EventEmitter {
         fs: { readTextFile: false, writeTextFile: false },
         terminal: false,
       },
-      clientInfo: { name: "wcoder", version: "0.1.0" },
+      clientInfo: { name: "wcoder", version: pkg.version },
     });
   }
 
@@ -179,7 +206,7 @@ export class ACPClient extends EventEmitter {
     return this._send("session/prompt", {
       sessionId: this.sessionId,
       prompt: [{ type: "text", text }],
-    });
+    }, 10 * 60_000);
   }
 
   async cancel() {
