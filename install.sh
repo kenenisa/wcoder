@@ -425,10 +425,13 @@ EOF
 
 # --- Install Cursor CLI (agent) -----------------------------------------------
 CURSOR_CLI_FALLBACK_VERSION="2026.03.25-933d5a6"
+CURSOR_CLI_DIR="/usr/local/share/cursor-agent"
 
 install_cursor_cli() {
   if [[ -x "${INSTALL_DIR}/agent" ]]; then
-    ok "Cursor CLI ('agent') already installed at ${INSTALL_DIR}/agent"
+    local cur_ver
+    cur_ver="$("${INSTALL_DIR}/agent" -v 2>/dev/null || echo "unknown")"
+    ok "Cursor CLI already installed (${cur_ver})"
     return
   fi
 
@@ -445,18 +448,15 @@ install_cursor_cli() {
 
   # Fallback to direct download URL
   if [[ -z "$download_url" ]]; then
-    local cli_os="${OS}"
-    local cli_arch="${ARCH}"
-    download_url="https://downloads.cursor.com/lab/${CURSOR_CLI_FALLBACK_VERSION}/${cli_os}/${cli_arch}/agent-cli-package.tar.gz"
+    download_url="https://downloads.cursor.com/lab/${CURSOR_CLI_FALLBACK_VERSION}/${OS}/${ARCH}/agent-cli-package.tar.gz"
     info "Using fallback download URL (${CURSOR_CLI_FALLBACK_VERSION})"
   fi
 
-  local tmpdir
-  tmpdir="$(mktemp -d)"
+  # Extract the full package (the binary needs its companion JS/native files)
+  sudo mkdir -p "${CURSOR_CLI_DIR}"
 
   info "Downloading Cursor CLI ..."
-  if ! curl -fsSL "$download_url" | tar --strip-components=1 -xzf - -C "$tmpdir"; then
-    rm -rf "$tmpdir"
+  if ! curl -fsSL "$download_url" | sudo tar --strip-components=1 -xzf - -C "${CURSOR_CLI_DIR}"; then
     warn "Cursor CLI download failed."
     warn "Install it manually:"
     warn "  curl -fsSL https://cursor.com/install | bash"
@@ -465,19 +465,14 @@ install_cursor_cli() {
     return
   fi
 
-  if [[ -f "${tmpdir}/cursor-agent" ]]; then
-    sudo install -m 755 "${tmpdir}/cursor-agent" "${INSTALL_DIR}/agent"
-    ok "Cursor CLI installed to ${INSTALL_DIR}/agent"
-  else
-    rm -rf "$tmpdir"
+  if [[ ! -f "${CURSOR_CLI_DIR}/cursor-agent" ]]; then
     warn "cursor-agent binary not found in downloaded package."
-    warn "Install it manually:"
-    warn "  curl -fsSL https://cursor.com/install | bash"
-    warn "  sudo cp ~/.local/bin/agent ${INSTALL_DIR}/agent"
     return
   fi
 
-  rm -rf "$tmpdir"
+  sudo chmod 755 "${CURSOR_CLI_DIR}/cursor-agent"
+  sudo ln -sf "${CURSOR_CLI_DIR}/cursor-agent" "${INSTALL_DIR}/agent"
+  ok "Cursor CLI installed to ${INSTALL_DIR}/agent"
 }
 
 # --- Main ---------------------------------------------------------------------
